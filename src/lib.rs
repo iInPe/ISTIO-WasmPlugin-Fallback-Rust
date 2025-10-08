@@ -44,7 +44,7 @@ impl Default for Config {
 
 proxy_wasm::main! {{
     // Global Loglevel by Envoy：Error, Warn, Info, Debug or Trace if you want.
-    proxy_wasm::set_log_level(LogLevel::Debug);
+    proxy_wasm::set_log_level(LogLevel::Info);
     proxy_wasm::set_root_context(|_| Box::new(FallbackRoot::default()));
 }}
 
@@ -61,9 +61,9 @@ impl RootContext for FallbackRoot {
             Some(raw) if !raw.is_empty() => {
                 match serde_json::from_slice::<Config>(&raw) {
                     Ok(cfg) => {
-                        hlog(LogLevel::Debug, "[fallback] plugin configuring…");
+                        hlog(LogLevel::Info, "[fallback] plugin configuring…");
                         hlog(
-                            LogLevel::Debug,
+                            LogLevel::Info,
                             &format!(
                                 "[fallback] loaded config: rewrite_status_to_200={}, rules={}, log_verbose={}",
                                 cfg.rewrite_status_to_200, cfg.fallbacks.len(), cfg.log_verbose
@@ -91,7 +91,7 @@ impl RootContext for FallbackRoot {
 
     fn create_http_context(&self, _: u32) -> Option<Box<dyn HttpContext>> {
         if self.cfg.log_verbose {
-            hlog(LogLevel::Debug, "[fallback] create_http_context()");
+            hlog(LogLevel::Info, "[fallback] create_http_context()");
         }
         Some(Box::new(FallbackHttp {
             cfg: self.cfg.clone(),
@@ -124,7 +124,7 @@ impl HttpContext for FallbackHttp {
         if self.cfg.log_verbose {
             let method = kv(&req, ":method").unwrap_or("-");
             let authority = kv(&req, ":authority").unwrap_or("-");
-            hlog(LogLevel::Debug, &format!(
+            hlog(LogLevel::Info, &format!(
                 "[fallback][req#{:06}] request headers: method={}, host={}, path={}",
                 self.req_id, method, authority, self.path
             ));
@@ -139,7 +139,7 @@ impl HttpContext for FallbackHttp {
         if resp.is_empty() {
             // No header map available (common on certain local errors) — just pass through
             if self.cfg.log_verbose {
-                hlog(LogLevel::Debug, &format!(
+                hlog(LogLevel::Info, &format!(
                     "[fallback][req#{:06}] no response headers map -> continue", self.req_id
                 ));
             }
@@ -160,7 +160,7 @@ impl HttpContext for FallbackHttp {
             .unwrap_or(200);
 
         if self.cfg.log_verbose {
-            hlog(LogLevel::Debug, &format!(
+            hlog(LogLevel::Info, &format!(
                 "[fallback][req#{:06}] upstream status={}; path={}",
                 self.req_id, status, self.path
             ));
@@ -177,14 +177,14 @@ impl HttpContext for FallbackHttp {
             .find(|it| self.path.starts_with(&it.path))
         {
             let code = if self.cfg.rewrite_status_to_200 { 200 } else { status as u32 };
-            hlog(LogLevel::Debug, &format!(
+            hlog(LogLevel::Info, &format!(
                 "[fallback][req#{:06}] TRIGGERED on `{}` -> local reply {}",
                 self.req_id, item.path, code
             ));
             // IMPORTANT: Do Not Call Any Hostcalls After This!!!
             let headers = vec![
                 ("content-type", "application/json"),
-                ("x-fallback", "wasm"),
+                ("X-An-Fallback", "Wasm"),
             ];
             self.send_http_response(code, headers, Some(item.body.as_bytes()));
             return Action::Pause;
